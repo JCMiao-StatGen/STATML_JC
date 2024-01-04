@@ -1,0 +1,60 @@
+---
+title: "Selective inference"
+output: html_document
+author: "Jiacheng Miao"
+date: "2023-11-28"
+---
+
+# Lasso selective inference
+```{r}
+# Load necessary library for LASSO
+library(glmnet)
+library(ggplot2)
+
+# Set up
+set.seed(123) # For reproducibility
+
+# Create matrix X with i.i.d normal entries
+X <- matrix(rnorm(100 * 200), nrow = 100, ncol = 200)
+
+# Define the true coefficient vector beta
+beta <- c(rep(5, 10), rep(0, 190))
+
+# Generate the error term epsilon
+epsilon <- rnorm(100) # Assuming standard normal distribution
+
+# Compute the response vector y
+y <- X %*% beta + epsilon
+
+# Apply the LASSO method to select variables
+lasso_fit <- glmnet(X, y, alpha = 1)
+cv_fit <- cv.glmnet(X, y, alpha = 1)
+optimal_lambda <- cv_fit$lambda.min
+lasso_fit_optimal <- glmnet(X, y, alpha = 1, lambda = optimal_lambda)
+
+# Extract the coefficients from the LASSO fit
+beta_lasso <- predict(lasso_fit_optimal, type = "coefficients", s = optimal_lambda)[1:200,]
+
+# Identify the non-zero coefficients
+selected <- which(beta_lasso != 0)
+
+# Subset X for the selected variables
+X_selected <- X[, selected]
+
+# Fit OLS model to the selected variables
+ols_fit <- lm(y ~ X_selected)
+
+# Calculate z-scores for the coefficients
+coefs <- summary(ols_fit)$coefficients
+z_scores <- coefs[, "Estimate"] / coefs[, "Std. Error"]
+p_values <- 2 * (1 - pnorm(abs(z_scores)))
+p_values_df <- data.frame(p_values)
+
+# Plot the histogram of p-values
+ggplot(p_values_df, aes(x = p_values)) +
+  geom_histogram(bins = 30, fill = '#6CB7DA', color = 'black') +
+  labs(title = 'Histogram of p-values for null coefficients',
+       x = 'p-values',
+       y = 'Frequency') +
+  theme_minimal()
+```
